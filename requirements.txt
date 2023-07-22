@@ -13,6 +13,6 @@ python-dateutil==2.8.1
 rsa==4.7.2
 six==1.15.0
 starlette==0.13.6
-Telethon==1.21.1
+Telethon
 typing-extensions==3.7.4.3
 uvicorn==0.13.4

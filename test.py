@@ -13,8 +13,7 @@ config.read('config.ini')
 
 app = FastAPI()
 
-# Initialize your Telegram client here
-client = TelegramClient(config['Telegram']['SESSION'], int(config['Telegram']['API_ID']), config['Telegram']['API_HASH'])
+block_list = ["广告", "证书", "机场", "流量", "破解游戏"]
 
 try:
     with open('hash.pickle', 'rb') as f:
@@ -56,13 +55,17 @@ async def channels(channel: str):
                 fg.generator(config['RSS']['GENERATOR'])
 
                 message_count = int(config['RSS']['RECORDS'])
-                print(ch['username'])
+                # print(ch['username'])
                 async for message in client.iter_messages(ch['username']):
+                    text = message.text
                     if message_count < 0:
                         break
-                    print(message.id, message.text)
+                    if text and any(item in text for item in block_list):
+                        continue
+                    # print(message.id, message.text)
                     if not (config['RSS'].getboolean('SKIP_EMPTY') and not message.text):
                         fe = fg.add_entry(order='append')
+                        fe.title(markdown(message.text).strip().splitlines()[0])
                         fe.guid(guid=f"{link}{ch['username']}/{message.id}", permalink=True)
                         fe.content(markdown(message.text))
                         fe.published(message.date)
@@ -70,10 +73,11 @@ async def channels(channel: str):
                 return fg.rss_str()
 
         response = await get_channel_info(channel)
-        print(response)
+        # print(response)
         return Response(content=response, media_type='application/xml')
     except Exception as e:
         warn = f"{str(e)}, request: '{channel}'"
         logging.error(warn)
         return warn
+
 
