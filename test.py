@@ -7,13 +7,17 @@ import configparser
 import pickle
 import logging
 from feedgen.feed import FeedGenerator
+from telethon.tl.types import InputPeerChannel, MessageMediaPhoto
+
+
+import boto3
 
 config = configparser.ConfigParser()
 config.read('config.ini')
 
 app = FastAPI()
 
-block_list = ["广告", "证书", "机场", "流量", "破解游戏"]
+block_list = ["广告", "证书", "机场", "流量", "游戏"]
 
 try:
     with open('hash.pickle', 'rb') as f:
@@ -21,6 +25,20 @@ try:
     logging.info(f'Readed {len(channel_hash)} records from the hash')
 except FileNotFoundError:
     channel_hash = dict()
+
+
+def upload_pictures(file_path, object_name):
+    try:
+        # 创建 S3 客户端并配置凭证
+        s3_client = boto3.client('s3', aws_access_key_id=config['PICTURES']['SECRET_ID'], aws_secret_access_key=config['PICTURES']['SECRET_KEY'], endpoint_url=config['PICTURES']['END_POINT'])
+
+        # 上传文件到 S3 存储桶
+        s3_client.upload_file(file_path, config['PICTURES']['BUCKET_NAME'], object_name)
+
+        return config['PICTURES']['END_POINT'] + "/" + config['PICTURES']['BUCKET_NAME'] + "/" + object_name
+    except Exception as e:
+        print(f"上传失败：{e}")
+        return False
 
 @app.get("/")
 def read_root():
@@ -48,7 +66,7 @@ async def channels(channel: str):
                 ch = channel_hash[channel]
 
                 fg = FeedGenerator()
-                fg.title(f"{ch['title']} (@{ch['username']}, id:{ch['id']})")
+                fg.title(f"{ch['title']}")
                 fg.subtitle(ch['about'])
                 link = f"t.me/s/{ch['username']}"
                 fg.link(href=f'https://{link}', rel='alternate')
@@ -62,12 +80,24 @@ async def channels(channel: str):
                         break
                     if text and any(item in text for item in block_list):
                         continue
+
+                    message_content = ""
+                    if message.media and isinstance(message.media, MessageMediaPhoto):
+                        photo = message.media.photo
+                        file_name = "{}_{}.jpg".format(ch['username'], str(message.id))
+                        file_path = "/root/code/tgtorss/pictures/{}".format(file_name)
+                        # 下载照片
+                        await client.download_media(photo, file=file_path)
+                        picture_url = upload_pictures(file_path, file_name)
+                        message_content += f'<a href="{picture_url}" target="_blank" rel="noopener" onclick="return confirm(\'Open this link? Click OK to open:{picture_url}\');"><img src="{picture_url}" alt="Image"></a>'
+
                     # print(message.id, message.text)
                     if not (config['RSS'].getboolean('SKIP_EMPTY') and not message.text):
+                        message_content += str(markdown(message.text))
                         fe = fg.add_entry(order='append')
                         fe.title(markdown(message.text).strip().splitlines()[0])
                         fe.guid(guid=f"{link}{ch['username']}/{message.id}", permalink=True)
-                        fe.content(markdown(message.text))
+                        fe.content(message_content)
                         fe.published(message.date)
                     message_count -= 1
                 return fg.rss_str()
