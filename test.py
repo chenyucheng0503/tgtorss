@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI, HTTPException
 from starlette.responses import Response
 from telethon.sync import TelegramClient
@@ -7,8 +9,7 @@ import configparser
 import pickle
 import logging
 from feedgen.feed import FeedGenerator
-from telethon.tl.types import InputPeerChannel, MessageMediaPhoto
-
+from telethon.tl.types import InputPeerChannel, MessageMediaPhoto, MessageMediaDocument
 
 import boto3
 
@@ -17,7 +18,7 @@ config.read('config.ini')
 
 app = FastAPI()
 
-block_list = ["广告", "证书", "机场", "流量", "游戏"]
+block_list = ["广告", "证书", "机场", "流量", "游戏", "运营商", "代理", "星链云"]
 
 try:
     with open('hash.pickle', 'rb') as f:
@@ -86,13 +87,28 @@ async def channels(channel: str):
                         photo = message.media.photo
                         file_name = "{}_{}.jpg".format(ch['username'], str(message.id))
                         file_path = "/root/code/tgtorss/pictures/{}".format(file_name)
-                        # 下载照片
-                        await client.download_media(photo, file=file_path)
-                        picture_url = upload_pictures(file_path, file_name)
+                        if os.path.exists(file_path):
+                            picture_url = config['PICTURES']['END_POINT'] + "/" + config['PICTURES']['BUCKET_NAME'] + "/" + file_name
+                        else:
+                            await client.download_media(message, thumb=-1, file=file_path)
+                            picture_url = upload_pictures(file_path, file_name)
+
                         message_content += f'<a href="{picture_url}" target="_blank" rel="noopener" onclick="return confirm(\'Open this link? Click OK to open:{picture_url}\');"><img src="{picture_url}" alt="Image"></a>'
+                        # message_content += "![{}]({})".format(file_name, picture_url)
+
+                    if isinstance(message.media, MessageMediaDocument):
+                        file_name = "{}_{}_thumb.jpg".format(ch['username'], str(message.id))
+                        file_path = "/root/code/tgtorss/pictures/{}".format(file_name)
+                        if os.path.exists(file_path):
+                            picture_url = config['PICTURES']['END_POINT'] + "/" + config['PICTURES']['BUCKET_NAME'] + "/" + file_name
+                        else:
+                            await client.download_media(message, thumb=-1, file=file_path)
+                            picture_url = upload_pictures(file_path, file_name)
+                        message_content += f'<a href="{picture_url}" target="_blank" rel="noopener" onclick="return confirm(\'Open this link? Click OK to open:{picture_url}\');"><img src="{picture_url}" alt="Image"></a>'
+                        # message_content += "![{}]({})".format(file_name, picture_url)
 
                     # print(message.id, message.text)
-                    if not (config['RSS'].getboolean('SKIP_EMPTY') and not message.text):
+                    if text or message_content != "":
                         message_content += str(markdown(message.text))
                         fe = fg.add_entry(order='append')
                         fe.title(markdown(message.text).strip().splitlines()[0])
