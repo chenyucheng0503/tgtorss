@@ -112,8 +112,8 @@ async def channels(channel: str):
 
                     message_group = [message]
                     message_group_text = str(markdown(message.text)) if message.text else ""
-                    for item in replace_list:
-                        message_group_text = message_group_text.replace(item, "")
+                    # for item in replace_list:
+                    #     message_group_text = message_group_text.replace(item, "")
                     
                     # 将普通网址设置为可跳转
                     message_group_text = re.sub(r'<p>(https?://\S+)</p>', r'<a href="\1">\1</a>', message_group_text)
@@ -137,7 +137,10 @@ async def channels(channel: str):
                     # print(message.id, message.text)
                     if message_group_text != "" or message_photo_content != "":
                         fe = fg.add_entry(order='append')
-                        fe.title(markdown(message.text).strip().splitlines()[0])
+                        title_content = markdown(message.text).strip().splitlines()[0]
+                        for item in replace_list:
+                            title_content = title_content.replace(item, "")
+                        fe.title(title_content)
                         fe.guid(guid=f"{link}{ch['username']}/{message.id}", permalink=True)
                         fe.content(message_photo_content + message_group_text)
                         fe.published(message.date)
