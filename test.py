@@ -19,7 +19,8 @@ config.read('config.ini')
 
 app = FastAPI()
 
-block_list = ["证书", "机场", "流量卡", "游戏", "运营商", "星链云"]
+block_list = ["证书", "机场", "流量卡", "游戏", "运营商", "星链云", "Hneko", "伪装上架观影", "香烟", "印度药", "高价收普卡","支付宝每日都可搜索","广告投放","夜煞云","频道推荐"]
+replace_list = ["#脚本 #QuantumultX #Loon #Surge #Shadowrocket #Stash #Crack"]
 
 try:
     with open('hash.pickle', 'rb') as f:
@@ -110,7 +111,10 @@ async def channels(channel: str):
                     message_id.append(message.id)
 
                     message_group = [message]
-                    message_group_text = str(markdown(message.text))
+                    message_group_text = str(markdown(message.text)) if message.text else ""
+                    for item in replace_list:
+                        message_group_text = message_group_text.replace(item, "")
+                    
                     # 将普通网址设置为可跳转
                     message_group_text = re.sub(r'<p>(https?://\S+)</p>', r'<a href="\1">\1</a>', message_group_text)
                     if message.grouped_id:
