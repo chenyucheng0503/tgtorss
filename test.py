@@ -1,5 +1,5 @@
 import os
-
+import traceback
 from fastapi import FastAPI, HTTPException
 from starlette.responses import Response
 from telethon.sync import TelegramClient
@@ -12,6 +12,7 @@ from feedgen.feed import FeedGenerator
 from telethon.tl.types import InputPeerChannel, MessageMediaPhoto, MessageMediaDocument
 from uvicorn import run
 import boto3
+import re
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -45,16 +46,25 @@ def upload_pictures(file_path, object_name):
 async def parse_photo_document(client, messages, channel_name):
     message_photo_content = ""
     for message in messages:
-        if (message.media and isinstance(message.media, MessageMediaPhoto)) or isinstance(message.media, MessageMediaDocument):
-            file_name = "{}_{}.jpg".format(channel_name, str(message.id))
-            file_path = "{}/pictures/{}".format(os.getcwd(), file_name)
-            if os.path.exists(file_path):
-                picture_url = config['PICTURES']['END_POINT'] + "/" + config['PICTURES']['BUCKET_NAME'] + "/" + file_name
-            else:
-                await client.download_media(message, thumb=-1, file=file_path)
-                picture_url = upload_pictures(file_path, file_name)
+        if message.media and (isinstance(message.media, MessageMediaPhoto) or isinstance(message.media, MessageMediaDocument)):
+            try:
+                file_name = "{}_{}.jpg".format(channel_name, str(message.id))
+                file_path = "{}/pictures/{}".format(os.getcwd(), file_name)
+                if os.path.exists(file_path):
+                    picture_url = config['PICTURES']['END_POINT'] + "/" + config['PICTURES']['BUCKET_NAME'] + "/" + file_name
+                else:
+                    await client.download_media(message, thumb=-1, file=file_path)
+                    picture_url = upload_pictures(file_path, file_name)
 
-            message_photo_content += f'<a href="{picture_url}" target="_blank" rel="noopener" onclick="return confirm(\'Open this link? Click OK to open:{picture_url}\');"><img src="{picture_url}" alt="Image"></a>'
+                if isinstance(message.media, MessageMediaDocument):
+                    documents = message.media.document.attributes
+                    message_photo_content += "\n监测到文档: "
+                    message_photo_content += ";".join([i.file_name for i in documents])
+                    message_photo_content += "\n"
+                message_photo_content += f'<img src="{picture_url}" alt="Image">'
+            except Exception as e:
+                print(e)
+                continue
     return message_photo_content
 
 @app.get("/")
@@ -101,12 +111,14 @@ async def channels(channel: str):
 
                     message_group = [message]
                     message_group_text = str(markdown(message.text))
+                    # 将普通网址设置为可跳转
+                    message_group_text = re.sub(r'<p>(https?://\S+)</p>', r'<a href="\1">\1</a>', message_group_text)
                     if message.grouped_id:
                         group_flag = True
                         curr_id = message.id
                         while True:
                             next_message = await client.get_messages(ch['username'], ids=curr_id - 1)
-                            if next_message.grouped_id and next_message.grouped_id == message.grouped_id:
+                            if next_message and next_message.grouped_id and next_message.grouped_id == message.grouped_id:
                                 message_group.append(next_message)
                                 message_id.append(next_message.id)
                                 message_group_text += str(markdown(next_message.text))
@@ -119,12 +131,13 @@ async def channels(channel: str):
                     message_photo_content = await parse_photo_document(client, message_group, ch['username'])
 
                     # print(message.id, message.text)
-                    if message_group_text!="" or message_photo_content != "":
+                    if message_group_text != "" or message_photo_content != "":
                         fe = fg.add_entry(order='append')
                         fe.title(markdown(message.text).strip().splitlines()[0])
                         fe.guid(guid=f"{link}{ch['username']}/{message.id}", permalink=True)
                         fe.content(message_photo_content + message_group_text)
                         fe.published(message.date)
+                        fe.link(href='https://t.me/{}/{}'.format(ch['username'], message.id), rel='alternate')
                     message_count -= 1
                 return fg.rss_str()
 
@@ -132,9 +145,11 @@ async def channels(channel: str):
         # print(response)
         return Response(content=response, media_type='application/xml')
     except Exception as e:
+        traceback.print_exc()
         warn = f"{str(e)}, request: '{channel}'"
         logging.error(warn)
         return warn
 
 if __name__ == '__main__':
     run(app)
+
