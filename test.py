@@ -20,7 +20,7 @@ config.read('config.ini')
 app = FastAPI()
 
 block_list = ["证书", "机场", "流量卡", "游戏", "运营商", "星链云", "Hneko", "伪装上架观影", "香烟", "印度药", "高价收普卡","支付宝每日都可搜索","广告投放","夜煞云","频道推荐"]
-replace_list = ["#脚本 #QuantumultX #Loon #Surge #Shadowrocket #Stash #Crack"]
+replace_list = ["脚本 #QuantumultX #Loon #Surge #Shadowrocket #Stash #Crack"]
 
 try:
     with open('hash.pickle', 'rb') as f:
@@ -139,7 +139,10 @@ async def channels(channel: str):
                         fe = fg.add_entry(order='append')
                         title_content = markdown(message.text).strip().splitlines()[0]
                         for item in replace_list:
-                            title_content = title_content.replace(item, "")
+                            if item in title_content:
+                                title_content = markdown(message.text).strip().splitlines()[2]
+                                break
+                            # title_content = title_content.replace(item, "")
                         fe.title(title_content)
                         fe.guid(guid=f"{link}{ch['username']}/{message.id}", permalink=True)
                         fe.content(message_photo_content + message_group_text)
