@@ -1,6 +1,6 @@
 import os
 import traceback
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from starlette.responses import Response
 from telethon.sync import TelegramClient
 from telethon import functions
@@ -13,9 +13,27 @@ from telethon.tl.types import InputPeerChannel, MessageMediaPhoto, MessageMediaD
 from uvicorn import run
 import boto3
 import re
+import uvicorn
 
+
+# 读取 config
 config = configparser.ConfigParser()
-config.read('config.ini')
+current_dir = os.path.dirname(os.path.abspath(__file__))
+config_file_path = os.path.join(current_dir, 'config.ini') 
+log_file_path = os.path.join(current_dir, "tg2rss.log") 
+config.read(config_file_path)
+
+# 配置日志记录
+# logging.basicConfig(
+#     level=logging.INFO,
+#     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+#     handlers=[
+#         logging.FileHandler(log_file_path),
+#         # logging.StreamHandler()
+#     ]
+# )
+
+# logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -40,7 +58,7 @@ def upload_pictures(file_path, object_name):
 
         return config['PICTURES']['END_POINT'] + "/" + config['PICTURES']['BUCKET_NAME'] + "/" + object_name
     except Exception as e:
-        print(f"上传失败：{e}")
+        logging.error(f"上传失败：{e}")
         return False
 
 
@@ -68,6 +86,7 @@ async def parse_photo_document(client, messages, channel_name):
                 continue
     return message_photo_content
 
+
 @app.get("/")
 def read_root():
     return {"Hello": "World"}
@@ -75,6 +94,8 @@ def read_root():
 @app.get("/channels/")
 async def channels(channel: str):
     try:
+        print(channel)
+
         async def get_channel_info(channel: str):
             async with TelegramClient(config['Telegram']['SESSION'], int(config['Telegram']['API_ID']), config['Telegram']['API_HASH']) as client:
                 if channel not in channel_hash:
@@ -159,7 +180,9 @@ async def channels(channel: str):
         warn = f"{str(e)}, request: '{channel}'"
         logging.error(warn)
         return warn
+        
+        
 
 if __name__ == '__main__':
-    run(app)
+    run(app, host="0.0.0.0", port=38088)
 
